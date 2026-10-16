@@ -48,9 +48,8 @@ cd axion-builder
 ./axion-builder build
 ```
 
-The default image is `ghcr.io/divyam234/axion-builder:24.04-arm64`.
-Use `./axion-builder image` only when you want to build it locally. To pin a
-specific published revision, set `AXION_IMAGE=ghcr.io/divyam234/axion-builder:sha-<full-commit>`.
+The default image is `ghcr.io/divyam234/axion-builder:latest`.
+Use `./axion-builder image` only when you want to build it locally.
 
 ### Publishing the container image
 
@@ -58,7 +57,8 @@ Open **Actions → Publish ARM64 builder image → Run workflow**. It runs only 
 `workflow_dispatch` (not every push), builds natively on `ubuntu-24.04-arm`,
 smoke-tests the ARM64 tools and Python SSL, then pushes to GHCR using the
 workflow's `GITHUB_TOKEN` with `packages: write`. No extra registry secret is needed.
-Tags: `24.04-arm64` and `sha-<full-commit>`. BuildKit layers are cached between runs.
+Only the `latest` tag is published. Actions use major-version references;
+BuildKit layers are cached between runs.
 
 After first publication, check the GHCR package's **Package settings → Change
 visibility → Public** if anonymous pulls fail: GitHub can initially create

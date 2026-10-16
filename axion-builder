@@ -3,7 +3,7 @@
 set -euo pipefail
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 WORK=${AXION_WORK:-$ROOT/work}
-IMAGE=${AXION_IMAGE:-ghcr.io/divyam234/axion-builder:24.04-arm64}
+IMAGE=${AXION_IMAGE:-ghcr.io/divyam234/axion-builder:latest}
 IKA_REF=6a04063fdf107bf0c2b51f950291a9703b3a8070
 ACTION=${1:-help}
 [[ $# == 0 ]] || shift
