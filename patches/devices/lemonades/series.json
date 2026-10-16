@@ -1,0 +1,18 @@
+[
+  {
+    "project": "device/oneplus/sm8250-common",
+    "patch": "devices/lemonades/0003-kernel-host-sysroot.patch"
+  },
+  {
+    "project": "hardware/oplus",
+    "patch": "devices/lemonades/0007-remove-duplicate-waveform.patch"
+  },
+  {
+    "project": "vendor/oneplus/sm8250-common",
+    "patch": "devices/lemonades/0008-oplus-prebuilt-partitions.patch"
+  },
+  {
+    "project": "vendor/oneplus/camera",
+    "patch": "devices/lemonades/0009-camera-makefile-entrypoint.patch"
+  }
+]

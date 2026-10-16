@@ -6,7 +6,6 @@ there are no signing keys or proprietary binary files in the patch fixtures.
 """
 import argparse
 import importlib.util
-import json
 import subprocess
 import tempfile
 import xml.etree.ElementTree as ET
@@ -17,7 +16,10 @@ parser.add_argument('checkout', type=Path)
 args = parser.parse_args()
 source = args.checkout.resolve()
 root = Path(__file__).resolve().parent.parent
-series = json.loads((root / 'patches/series.json').read_text())
+spec = importlib.util.spec_from_file_location('apply_patches', root / 'scripts/apply-patches.py')
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+series = module.load_series(root, 'lemonades')
 projects = sorted((p.get('path', p.get('name')) for p in
                    ET.parse(root / 'manifests/known-good.xml').getroot().findall('project')),
                   key=len, reverse=True)
@@ -27,10 +29,6 @@ for entry in series:
     for line in patch.read_text().splitlines():
         if line.startswith(('--- a/', '+++ b/')):
             paths.add(Path(entry['project']) / line[6:].split('\t')[0])
-
-spec = importlib.util.spec_from_file_location('apply_patches', root / 'scripts/apply-patches.py')
-module = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(module)
 
 with tempfile.TemporaryDirectory(prefix='axion-patch-check-') as directory:
     target = Path(directory)

@@ -72,10 +72,6 @@
     "patch": "custom/0002-cpuinfo-clang22.patch"
   },
   {
-    "project": "device/oneplus/sm8250-common",
-    "patch": "custom/0003-kernel-host-sysroot.patch"
-  },
-  {
     "project": "vendor/lineage",
     "patch": "custom/0004-kernel-native-host-libraries.patch"
   },
@@ -86,17 +82,5 @@
   {
     "project": "tools/asuite",
     "patch": "custom/0006-atest-system-python.patch"
-  },
-  {
-    "project": "hardware/oplus",
-    "patch": "custom/0007-remove-duplicate-waveform.patch"
-  },
-  {
-    "project": "vendor/oneplus/sm8250-common",
-    "patch": "custom/0008-oplus-prebuilt-partitions.patch"
-  },
-  {
-    "project": "vendor/oneplus/camera",
-    "patch": "custom/0009-camera-makefile-entrypoint.patch"
   }
 ]

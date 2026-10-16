@@ -2,7 +2,13 @@
 # Rootless Podman entry point. Never installs host packages or modifies swap.
 set -euo pipefail
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-WORK=${AXION_WORK:-$ROOT/work}
+DEVICE=${DEVICE:-lemonades}
+VARIANT=${VARIANT:-userdebug}
+GMS=${GMS:-gms}
+[[ "$DEVICE" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]] || { echo 'Invalid DEVICE codename' >&2; exit 2; }
+case "$VARIANT" in user|userdebug|eng) ;; *) echo 'VARIANT must be user, userdebug, or eng' >&2; exit 2 ;; esac
+case "$GMS" in full) GMS=gms ;; vanilla) GMS=va ;; gms|pico|core|va) ;; *) echo 'GMS must be gms, full, pico, core, va, or vanilla' >&2; exit 2 ;; esac
+WORK=${AXION_WORK:-$ROOT/work/$DEVICE}
 IMAGE=${AXION_IMAGE:-ghcr.io/divyam234/axion-builder:latest}
 IKA_REF=6a04063fdf107bf0c2b51f950291a9703b3a8070
 ACTION=${1:-help}
@@ -11,10 +17,13 @@ ACTION=${1:-help}
 case "$ACTION" in
   help|-h|--help)
     cat <<'HELP'
-Usage: ./axion-builder {pull|image|sync|patches|provision|build|shell|status}
+Usage: ./axion-builder {pull|image|sync|patches|provision|configure|build|shell|status}
 Run pull, sync, patches, provision, then build (in that order).
 image builds locally instead of pulling the published GHCR image.
 Defaults: lemonades, userdebug, full GMS, -j6. ARM64 Linux host only.
+Select with DEVICE=<codename> VARIANT=userdebug GMS=gms (or pico/core/va).
+Each device defaults to work/<codename>; only lemonades is build-verified.
+DEVICE_MANIFEST=/absolute/file.xml supplies another device's vendor/dependency repos.
 AXION_WORK=/absolute/source/path uses an existing checkout without moving it.
 SKIP_GLOBS=1 is ONLY for source-content edits after a successful graph generation.
 Build-file, patch, toolchain, or dependency changes require SKIP_GLOBS=0.
@@ -22,13 +31,21 @@ HELP
     exit 0 ;;
   image) exec podman build -t "$IMAGE" "$ROOT/docker" ;;
   pull) exec podman pull "$IMAGE" ;;
-  sync|patches|provision|build|shell|status) ;;
+  sync|patches|provision|configure|build|shell|status) ;;
   *) echo "Unknown action: $ACTION" >&2; exit 2 ;;
 esac
 
 [[ $(uname -m) == aarch64 ]] || { echo 'Requires an ARM64 Linux host' >&2; exit 1; }
 mkdir -p "$WORK" "$ROOT/.cache" "$ROOT/logs"
 WORK=$(realpath "$WORK")
+echo "Target: $DEVICE / $VARIANT / $GMS; work: $WORK"
+if [[ ! -f "$ROOT/manifests/devices/$DEVICE.xml" ]]; then
+  echo "No bundled profile for $DEVICE: using common patches; device/vendor compatibility must be supplied and verified."
+fi
+if [[ -n "${DEVICE_MANIFEST:-}" ]]; then
+  DEVICE_MANIFEST=$(realpath "$DEVICE_MANIFEST")
+  [[ -f "$DEVICE_MANIFEST" ]] || { echo 'DEVICE_MANIFEST must be a file' >&2; exit 2; }
+fi
 if [[ "$ACTION" == provision ]]; then
   IKA="$ROOT/.cache/ika"
   if [[ ! -d "$IKA/.git" ]]; then
@@ -48,7 +65,11 @@ ARGS=(--rm --userns=keep-id --user "$(id -u):$(id -g)"
   -v "$WORK:/srv/axion:z" -v "$ROOT:/builder:ro,z"
   -w /srv/axion -e HOME=/srv/axion -e GIT_TERMINAL_PROMPT=0
   -e PYTHONUNBUFFERED=1 -e NOFILE_LIMIT="$LIMIT"
+  -e DEVICE="$DEVICE" -e VARIANT="$VARIANT" -e GMS="$GMS"
   -e BUILD_JOBS="${BUILD_JOBS:-6}" -e SKIP_GLOBS="${SKIP_GLOBS:-0}")
+if [[ -n "${DEVICE_MANIFEST:-}" ]]; then
+  ARGS+=(-v "$DEVICE_MANIFEST:/device-manifest.xml:ro,z")
+fi
 if [[ -d "$ROOT/.cache/ika" ]]; then
   ARGS+=(-v "$ROOT/.cache/ika:/srv/ika-upstream:ro,z")
 fi

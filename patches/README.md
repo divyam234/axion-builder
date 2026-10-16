@@ -1,7 +1,10 @@
 # Patch provenance
 
-`series.json` is authoritative. Each patch is applied in its named project;
-`.` denotes Android's source root. Conflicts stop without resetting anything.
+`series.json` lists the **common** patches. Then
+`devices/<codename>/series.json`, if present, adds only that device's patches.
+Each patch is applied in its named project; `.` denotes Android's source root.
+Conflicts stop without resetting anything. An unknown profile gets only the
+common set, not the lemonades fixes.
 
 ## ika (16 entries)
 
@@ -15,7 +18,7 @@ script did not need the remaining mogrify fallback.
 These are the ARM64-host/Clang/Rust/musl/Trusty pieces, not ika's desktop UI,
 graphics, camera or Cuttlefish feature patch set.
 
-## Custom (9 files)
+## Custom (9 files: 5 common + 4 lemonades-only)
 
 | Patch | Why |
 |---|---|
@@ -32,6 +35,8 @@ graphics, camera or Cuttlefish feature patch set.
 0007/0008/0009 are device/platform integration adaptations, not generic ARM64
 toolchain requirements. Keeping the source class or preferring a prebuilt can
 affect runtime selection: build success does **not** establish camera correctness.
+0003 is also scoped to lemonades because it edits its shared sm8250 device tree.
+These four live under `devices/lemonades/`; the other five remain in `custom/`.
 
 Custom patches are exported from the actual successful tree. Patch 0004 is
 relative to the already-applied ika kernel-tools changes, so the two sets do not
