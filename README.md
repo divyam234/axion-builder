@@ -41,12 +41,33 @@ applicable terms when fetching them.
 ```bash
 git clone https://github.com/divyam234/axion-builder.git
 cd axion-builder
-./axion-builder image
+./axion-builder pull
 ./axion-builder sync
 ./axion-builder patches
 ./axion-builder provision
 ./axion-builder build
 ```
+
+The default image is `ghcr.io/divyam234/axion-builder:24.04-arm64`.
+Use `./axion-builder image` only when you want to build it locally. To pin a
+specific published revision, set `AXION_IMAGE=ghcr.io/divyam234/axion-builder:sha-<full-commit>`.
+
+### Publishing the container image
+
+Open **Actions → Publish ARM64 builder image → Run workflow**. It runs only on
+`workflow_dispatch` (not every push), builds natively on `ubuntu-24.04-arm`,
+smoke-tests the ARM64 tools and Python SSL, then pushes to GHCR using the
+workflow's `GITHUB_TOKEN` with `packages: write`. No extra registry secret is needed.
+Tags: `24.04-arm64` and `sha-<full-commit>`. BuildKit layers are cached between runs.
+
+After first publication, check the GHCR package's **Package settings → Change
+visibility → Public** if anonymous pulls fail: GitHub can initially create
+packages as private, even for a public source repository. Alternatively log in
+to GHCR with an account/token allowed to read the package.
+
+This workflow publishes the **container dependencies only**, not a complete ROM.
+The Android source sync, patches, toolchain provisioning and compile still run
+locally with persistent storage and private signing keys.
 
 Sync defaults to the pinned manifest, including `device/oneplus/lemonades`,
 `sm8250-common`, `hardware/oplus`, kernel, both OnePlus vendor trees, and camera.

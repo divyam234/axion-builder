@@ -3,7 +3,7 @@
 set -euo pipefail
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 WORK=${AXION_WORK:-$ROOT/work}
-IMAGE=${AXION_IMAGE:-localhost/axion-builder:24.04}
+IMAGE=${AXION_IMAGE:-ghcr.io/divyam234/axion-builder:24.04-arm64}
 IKA_REF=6a04063fdf107bf0c2b51f950291a9703b3a8070
 ACTION=${1:-help}
 [[ $# == 0 ]] || shift
@@ -11,8 +11,9 @@ ACTION=${1:-help}
 case "$ACTION" in
   help|-h|--help)
     cat <<'HELP'
-Usage: ./axion-builder {image|sync|patches|provision|build|shell|status}
-Run image, sync, patches, provision, then build (in that order).
+Usage: ./axion-builder {pull|image|sync|patches|provision|build|shell|status}
+Run pull, sync, patches, provision, then build (in that order).
+image builds locally instead of pulling the published GHCR image.
 Defaults: lemonades, userdebug, full GMS, -j6. ARM64 Linux host only.
 AXION_WORK=/absolute/source/path uses an existing checkout without moving it.
 SKIP_GLOBS=1 is ONLY for source-content edits after a successful graph generation.
@@ -20,6 +21,7 @@ Build-file, patch, toolchain, or dependency changes require SKIP_GLOBS=0.
 HELP
     exit 0 ;;
   image) exec podman build -t "$IMAGE" "$ROOT/docker" ;;
+  pull) exec podman pull "$IMAGE" ;;
   sync|patches|provision|build|shell|status) ;;
   *) echo "Unknown action: $ACTION" >&2; exit 2 ;;
 esac
