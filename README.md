@@ -87,14 +87,6 @@ zellij attach axion-build
 No ROMs, proprietary binaries, Google apps, keys or caches are published here;
 external repositories retain their own distribution terms.
 
-## Container publishing
-
-**Actions → Publish ARM64 builder image → Run workflow** publishes only
-`ghcr.io/divyam234/axion-builder:latest`, not a ROM. It uses a native ARM64 runner,
-cached layers, smoke tests, major action versions and `GITHUB_TOKEN` with
-`packages: write`; no registry secret is needed. If a new package starts private,
-set its visibility to Public or authenticate to GHCR.
-
 ## Patches and verification
 
 | Path | Contents |
