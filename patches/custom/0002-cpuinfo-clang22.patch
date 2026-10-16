@@ -1,0 +1,13 @@
+diff --git a/Android.bp b/Android.bp
+index 87602a8..c440af7 100644
+--- a/Android.bp
++++ b/Android.bp
+@@ -108,6 +108,8 @@ cc_library_static {
+         "-Wno-unused-function",
+         "-Wno-unused-parameter",
+         "-Wno-missing-field-initializers",
++        // Clang 22: chipset tables intentionally contain fixed-width strings.
++        "-Wno-unterminated-string-initialization",
+         // __riscv_hwprobe() changed from unsigned long* to cpu_set_t*,
+         // but upstream hasn't updated yet.
+         "-Wno-incompatible-pointer-types",

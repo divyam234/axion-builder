@@ -1,0 +1,7 @@
+diff --git a/camera-vendor.mk b/camera-vendor.mk
+new file mode 100644
+--- /dev/null
++++ b/camera-vendor.mk
+@@ -0,0 +1,2 @@
++# Shim: Abungo mirror ships onepluscamera.mk
++$(call inherit-product, vendor/oneplus/camera/onepluscamera.mk)

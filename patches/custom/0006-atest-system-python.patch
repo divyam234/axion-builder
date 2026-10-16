@@ -1,0 +1,22 @@
+diff --git a/atest/Android.bp b/atest/Android.bp
+index 31e542dd..b867623b 100644
+--- a/atest/Android.bp
++++ b/atest/Android.bp
+@@ -86,13 +86,16 @@ python_binary_host {
+     name: "atest_flag_list_generator",
+     defaults: ["atest_binary_defaults"],
+     main: "atest_flag_list_generator.py",
++    // The ARM64 prebuilt Python launcher has no _ssl. Keep source in this
++    // build-only tool so it can run using the system Python and its SSL module.
++    embedded_launcher: false,
+ }
+ 
+ genrule {
+     name: "atest_flag_list_for_completion",
+     out: ["atest_flag_list_for_completion.txt"],
+     tools: ["atest_flag_list_generator"],
+-    cmd: "$(location atest_flag_list_generator) > $(out)",
++    cmd: "PATH=/usr/bin:/bin $(location atest_flag_list_generator) > $(out)",
+ }
+ 
+ python_library_host {

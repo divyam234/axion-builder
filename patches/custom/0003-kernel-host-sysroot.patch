@@ -1,0 +1,15 @@
+diff --git a/BoardConfigCommon.mk b/BoardConfigCommon.mk
+index cd91260..dadedff 100644
+--- a/BoardConfigCommon.mk
++++ b/BoardConfigCommon.mk
+@@ -99,6 +99,10 @@ TARGET_KERNEL_ADDITIONAL_FLAGS := BRAND_SHOW_FLAG=oneplus
+ TARGET_KERNEL_SOURCE := kernel/oneplus/sm8250
+ TARGET_KERNEL_CONFIG := vendor/kona-perf_defconfig vendor/oplus.config
+ TARGET_KERNEL_NO_GCC := true
++# ARM64 build host: kernel host tools must use host libc, not the x86-only
++# glibc sysroot (prebuilts/gcc/linux-x86). Upstream-supported knob, needed
++# because sm8250 is 4.19 (< 6.11 auto-host threshold).
++TARGET_KERNEL_LIBC_SYSROOT_USE := host
+ 
+ # Platform
+ BOARD_USES_QCOM_HARDWARE := true

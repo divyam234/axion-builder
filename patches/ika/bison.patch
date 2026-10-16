@@ -1,0 +1,74 @@
+Patch summary:
+Point Bison genrules at the checked-in build-tools data directory. Several
+external projects invoke the prebuilt Bison binary from Soong genrules, but the
+binary does not reliably discover its package data when launched from the build
+sandbox. Setting `BISON_PKGDATADIR` from the Bison tool location keeps parser
+generation host-independent for libpcap, one-true-awk, and iproute2. Mesa
+26.1.8's generated Soong files no longer carry a Bison genrule.
+
+diff --git a/external/libpcap/Android.bp b/external/libpcap/Android.bp
+index bf511871..a3a07818 100644
+--- a/external/libpcap/Android.bp
++++ b/external/libpcap/Android.bp
+@@ -46,7 +46,7 @@ genrule {
+ 
+ genrule {
+     name: "grammar.c",
+-    cmd: "M4=$(location m4) $(location bison) -p pcap_ --no-lines --output=$(genDir)/grammar.c $(in)",
++    cmd: "BISON_PKGDATADIR=$$(dirname $$(dirname $$(dirname $(location bison))))/common/bison M4=$(location m4) $(location bison) -p pcap_ --no-lines --output=$(genDir)/grammar.c $(in)",
+     out: ["grammar.c"],
+     srcs: [":grammar.y"],
+     tools: [
+@@ -59,7 +59,7 @@ genrule {
+     name: "grammar.h",
+     // bison --defines outputs an extra file in addition to outputting the parser,
+     // so we still use --output to ensure the unused file is still in genDir.
+-    cmd: "M4=$(location m4) $(location bison) -p pcap_ --no-lines --defines=$(genDir)/grammar.h --output=$(genDir)/unused $(in)",
++    cmd: "BISON_PKGDATADIR=$$(dirname $$(dirname $$(dirname $(location bison))))/common/bison M4=$(location m4) $(location bison) -p pcap_ --no-lines --defines=$(genDir)/grammar.h --output=$(genDir)/unused $(in)",
+     out: ["grammar.h"],
+     srcs: [":grammar.y"],
+     tools: [
+diff --git a/external/one-true-awk/Android.bp b/external/one-true-awk/Android.bp
+index 43c672c..1806dbb 100644
+--- a/external/one-true-awk/Android.bp
++++ b/external/one-true-awk/Android.bp
+@@ -51,7 +51,7 @@ cc_defaults {
+ 
+ genrule {
+     name: "awkgram.tab.c",
+-    cmd: "M4=$(location m4) $(location bison) -y --no-lines --output=$(genDir)/awkgram.tab.c $(in)",
++    cmd: "BISON_PKGDATADIR=$$(dirname $$(dirname $$(dirname $(location bison))))/common/bison M4=$(location m4) $(location bison) -y --no-lines --output=$(genDir)/awkgram.tab.c $(in)",
+     out: ["awkgram.tab.c"],
+     srcs: ["awkgram.y"],
+     tools: [
+@@ -64,7 +64,7 @@ genrule {
+     name: "awkgram.tab.h",
+     // bison --defines outputs an extra file in addition to outputting the parser,
+     // so we still use --output to ensure the unused file is still in genDir.
+-    cmd: "M4=$(location m4) $(location bison) -y --no-lines --defines=$(genDir)/awkgram.tab.h --output=$(genDir)/unused $(in)",
++    cmd: "BISON_PKGDATADIR=$$(dirname $$(dirname $$(dirname $(location bison))))/common/bison M4=$(location m4) $(location bison) -y --no-lines --defines=$(genDir)/awkgram.tab.h --output=$(genDir)/unused $(in)",
+     out: ["awkgram.tab.h"],
+     srcs: ["awkgram.y"],
+     tools: [
+diff --git a/external/iproute2/tc/Android.bp b/external/iproute2/tc/Android.bp
+index bf8b027b..6bb8c8da 100644
+--- a/external/iproute2/tc/Android.bp
++++ b/external/iproute2/tc/Android.bp
+@@ -41,7 +41,7 @@ genrule {
+ 
+ genrule {
+     name: "emp_ematch.yacc.c",
+-    cmd: "M4=$(location m4) $(location bison) -y --output=$(genDir)/emp_ematch.yacc.c $(in)",
++    cmd: "BISON_PKGDATADIR=$$(dirname $$(dirname $$(dirname $(location bison))))/common/bison M4=$(location m4) $(location bison) -y --output=$(genDir)/emp_ematch.yacc.c $(in)",
+     out: ["emp_ematch.yacc.c"],
+     srcs: ["emp_ematch.y"],
+     tools: [
+@@ -54,7 +54,7 @@ genrule {
+     name: "emp_ematch.yacc.h",
+     // bison --defines outputs an extra file in addition to outputting the parser,
+     // so we still use --output to ensure the unused file is still in genDir.
+-    cmd: "M4=$(location m4) $(location bison) -y --defines=$(genDir)/emp_ematch.yacc.h --output=$(genDir)/unused $(in)",
++    cmd: "BISON_PKGDATADIR=$$(dirname $$(dirname $$(dirname $(location bison))))/common/bison M4=$(location m4) $(location bison) -y --defines=$(genDir)/emp_ematch.yacc.h --output=$(genDir)/unused $(in)",
+     out: ["emp_ematch.yacc.h"],
+     srcs: ["emp_ematch.y"],
+     tools: [

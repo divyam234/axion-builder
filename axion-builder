@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Rootless Podman entry point. Never installs host packages or modifies swap.
+set -euo pipefail
+ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+WORK=${AXION_WORK:-$ROOT/work}
+IMAGE=${AXION_IMAGE:-localhost/axion-builder:24.04}
+IKA_REF=6a04063fdf107bf0c2b51f950291a9703b3a8070
+ACTION=${1:-help}
+[[ $# == 0 ]] || shift
+
+case "$ACTION" in
+  help|-h|--help)
+    cat <<'HELP'
+Usage: ./axion-builder {image|sync|patches|provision|build|shell|status}
+Run image, sync, patches, provision, then build (in that order).
+Defaults: lemonades, userdebug, full GMS, -j6. ARM64 Linux host only.
+AXION_WORK=/absolute/source/path uses an existing checkout without moving it.
+SKIP_GLOBS=1 is ONLY for source-content edits after a successful graph generation.
+Build-file, patch, toolchain, or dependency changes require SKIP_GLOBS=0.
+HELP
+    exit 0 ;;
+  image) exec podman build -t "$IMAGE" "$ROOT/docker" ;;
+  sync|patches|provision|build|shell|status) ;;
+  *) echo "Unknown action: $ACTION" >&2; exit 2 ;;
+esac
+
+[[ $(uname -m) == aarch64 ]] || { echo 'Requires an ARM64 Linux host' >&2; exit 1; }
+mkdir -p "$WORK" "$ROOT/.cache" "$ROOT/logs"
+WORK=$(realpath "$WORK")
+if [[ "$ACTION" == provision ]]; then
+  IKA="$ROOT/.cache/ika"
+  if [[ ! -d "$IKA/.git" ]]; then
+    git clone --no-checkout https://github.com/DesktopECHO/ika.git "$IKA"
+    git -C "$IKA" checkout --detach "$IKA_REF"
+  fi
+  [[ $(git -C "$IKA" rev-parse HEAD) == "$IKA_REF" ]] || {
+    echo "ika checkout must be pinned to $IKA_REF; refusing to overwrite it" >&2; exit 1;
+  }
+fi
+
+LIMIT=$(ulimit -Hn)
+[[ "$LIMIT" != unlimited ]] || LIMIT=524288
+(( LIMIT <= 524288 )) || LIMIT=524288
+ARGS=(--rm --userns=keep-id --user "$(id -u):$(id -g)"
+  --ulimit "nofile=$LIMIT:$LIMIT" --shm-size=8g
+  -v "$WORK:/srv/axion:z" -v "$ROOT:/builder:ro,z"
+  -w /srv/axion -e HOME=/srv/axion -e GIT_TERMINAL_PROMPT=0
+  -e PYTHONUNBUFFERED=1 -e NOFILE_LIMIT="$LIMIT"
+  -e BUILD_JOBS="${BUILD_JOBS:-6}" -e SKIP_GLOBS="${SKIP_GLOBS:-0}")
+if [[ -d "$ROOT/.cache/ika" ]]; then
+  ARGS+=(-v "$ROOT/.cache/ika:/srv/ika-upstream:ro,z")
+fi
+if [[ "$ACTION" == shell ]]; then
+  exec podman run -it "${ARGS[@]}" "$IMAGE" bash
+fi
+LOG="$ROOT/logs/$ACTION-$(date -u +%Y%m%dT%H%M%SZ)-$$.log"
+echo "Log: $LOG"
+podman run "${ARGS[@]}" "$IMAGE" bash /builder/scripts/in-container.sh "$ACTION" "$@" 2>&1 | tee "$LOG"

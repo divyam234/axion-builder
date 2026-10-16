@@ -1,0 +1,14 @@
+# Everything built, fetched, or generated locally stays private.
+/.cache/
+/work/
+/logs/
+/.env
+*.pk8
+*.pem
+*.p12
+*.jks
+*.keystore
+*.apk
+*.img
+*.zip
+__pycache__/

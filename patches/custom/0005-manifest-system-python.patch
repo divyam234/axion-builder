@@ -1,0 +1,22 @@
+diff --git a/build/tasks/build-manifest_xml.mk b/build/tasks/build-manifest_xml.mk
+index 5f549679..333db6ee 100644
+--- a/build/tasks/build-manifest_xml.mk
++++ b/build/tasks/build-manifest_xml.mk
+@@ -16,9 +16,16 @@ ifdef MANIFEST_EXCLUDES
+ MANIFEST_EXCLUDES := |$(MANIFEST_EXCLUDES)
+ endif
+ 
++ifeq ($(HOST_ARCH),arm64)
++# The ARM64 build-tools Python lacks _ssl, required by git-repo.
++BUILD_MANIFEST_PYTHON := /usr/bin/python3
++else
++BUILD_MANIFEST_PYTHON := python3
++endif
++
+ $(INSTALLED_BUILD_MANIFEST_XML_TARGET):
+ 	mkdir -p $(dir $@)
+-	REPO_TRACE=0 python3 .repo/repo/repo manifest -o - -r | grep -Ev "proprietary_$(MANIFEST_EXCLUDES)" > $@
++	set -o pipefail; REPO_TRACE=0 $(BUILD_MANIFEST_PYTHON) .repo/repo/repo manifest -o - -r | grep -Ev "proprietary_$(MANIFEST_EXCLUDES)" > $@
+ 
+ .PHONY: build-manifest.xml
+ build-manifest.xml: $(INSTALLED_BUILD_MANIFEST_XML_TARGET)

@@ -1,0 +1,123 @@
+diff --git a/libc/kernel/tools/cpp.py b/libc/kernel/tools/cpp.py
+index df508060d..f289268e7 100755
+--- a/libc/kernel/tools/cpp.py
++++ b/libc/kernel/tools/cpp.py
+@@ -2,8 +2,10 @@
+ """A glorified C pre-processor parser."""
+ 
+ import ctypes
++import glob
+ import logging
+ import os
++import platform
+ import re
+ import site
+ import unittest
+@@ -14,7 +16,19 @@ if top is None:
+     utils.panic('ANDROID_BUILD_TOP not set.\n')
+ 
+ # Set up the env vars for libclang.
+-site.addsitedir(os.path.join(top, 'prebuilts/clang/host/linux-x86/clang-stable/lib/python3/site-packages/'))
++host_tag = 'linux-arm64' if platform.machine() in ('aarch64', 'arm64') else 'linux-x86'
++clang_version = os.getenv('LLVM_PREBUILTS_VERSION', 'clang-stable')
++clang_root = os.path.join(top, 'prebuilts/clang/host', host_tag, clang_version)
++if host_tag == 'linux-arm64' and not os.path.isdir(clang_root):
++    # sbox does not preserve LLVM_PREBUILTS_VERSION. Use the single installed
++    # native payload, keeping its Python bindings and shared library together.
++    candidates = [p for p in glob.glob(os.path.join(
++        top, 'prebuilts/clang/host/linux-arm64/clang-r*'))
++        if os.path.isfile(os.path.join(p, 'lib/libclang.so'))]
++    if len(candidates) != 1:
++        raise RuntimeError('Expected one ARM64 Clang payload; set LLVM_PREBUILTS_VERSION')
++    clang_root = candidates[0]
++site.addsitedir(os.path.join(clang_root, 'lib/python3/site-packages/'))
+ 
+ import clang.cindex
+ from clang.cindex import conf
+@@ -28,13 +42,19 @@ from clang.cindex import TranslationUnit
+ 
+ # Set up LD_LIBRARY_PATH to include libclang.so, libLLVM.so, and etc.
+ # Note that setting LD_LIBRARY_PATH with os.putenv() sometimes doesn't help.
+-clang.cindex.Config.set_library_file(os.path.join(top, 'prebuilts/clang/host/linux-x86/clang-stable/lib/libclang.so'))
++clang.cindex.Config.set_library_file(os.path.join(clang_root, 'lib/libclang.so'))
+ 
+ from defaults import *
+ 
+ 
+ debugBlockParser = False
+ debugCppExpr = False
++
++def cursor_kind(cursor):
++    # LLVM 22 rejects .kind on null cursors; older bindings returned INVALID_FILE.
++    if cursor is None or (hasattr(cursor, 'is_null') and cursor.is_null()):
++        return CursorKind.INVALID_FILE
++    return cursor.kind
+ debugOptimIf01 = False
+ 
+ ###############################################################################
+@@ -1066,7 +1086,7 @@ class Block(object):
+                 buf = ''
+                 newline = True
+             # We prefer a new line for each constant in enum.
+-            elif t.id == ',' and t.cursor.kind == CursorKind.ENUM_DECL:
++            elif t.id == ',' and cursor_kind(t.cursor) == CursorKind.ENUM_DECL:
+                 result.append(strip_space(buf) + ',')
+                 buf = ''
+                 newline = True
+@@ -1553,8 +1573,9 @@ class BlockParser(object):
+                 t = tokens[i]
+                 if debugBlockParser:
+                     print(' ' * 2, t.id, t.kind, t.cursor.kind)
+-                if (detect_change and t.cursor.extent != extent and
+-                    t.cursor.kind == CursorKind.PREPROCESSING_DIRECTIVE):
++                if (detect_change and
++                    cursor_kind(t.cursor) == CursorKind.PREPROCESSING_DIRECTIVE and
++                    t.cursor.extent != extent):
+                     break
+                 result.append(t)
+                 i += 1
+@@ -1565,7 +1586,7 @@ class BlockParser(object):
+             result = []
+             line = tokens[i].location.line
+             while i < len(tokens) and tokens[i].location.line == line:
+-                if tokens[i].cursor.kind == CursorKind.PREPROCESSING_DIRECTIVE:
++                if cursor_kind(tokens[i].cursor) == CursorKind.PREPROCESSING_DIRECTIVE:
+                     break
+                 result.append(tokens[i])
+                 i += 1
+@@ -1589,7 +1610,7 @@ class BlockParser(object):
+                                         cursor.kind,
+                                         self._short_extent(cursor.extent)))
+ 
+-            if cursor.kind == CursorKind.PREPROCESSING_DIRECTIVE:
++            if cursor_kind(cursor) == CursorKind.PREPROCESSING_DIRECTIVE:
+                 if buf:
+                     blocks.append(Block(buf))
+                     buf = []
+@@ -1633,7 +1654,7 @@ class BlockParser(object):
+                     blocks.append(Block(ret[2:], directive=directive,
+                                         lineno=t.location.line))
+ 
+-            elif cursor.kind == CursorKind.INCLUSION_DIRECTIVE:
++            elif cursor_kind(cursor) == CursorKind.INCLUSION_DIRECTIVE:
+                 if buf:
+                     blocks.append(Block(buf))
+                     buf = []
+@@ -1643,7 +1664,7 @@ class BlockParser(object):
+                 blocks.append(Block(ret[2:], directive=directive,
+                                     lineno=t.location.line))
+ 
+-            elif cursor.kind == CursorKind.VAR_DECL:
++            elif cursor_kind(cursor) == CursorKind.VAR_DECL:
+                 if buf:
+                     blocks.append(Block(buf))
+                     buf = []
+@@ -1651,7 +1672,7 @@ class BlockParser(object):
+                 (i, ret) = consume_extent(i, tokens, detect_change=True)
+                 buf += ret
+ 
+-            elif cursor.kind == CursorKind.FUNCTION_DECL:
++            elif cursor_kind(cursor) == CursorKind.FUNCTION_DECL:
+                 if buf:
+                     blocks.append(Block(buf))
+                     buf = []
