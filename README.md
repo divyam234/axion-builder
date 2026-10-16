@@ -1,52 +1,29 @@
 # axion-builder
 
-Build **AxionOS / Android 16 on an ARM64 Linux host**, with selectable device,
-build variant, and Google-app flavor, using rootless Podman and DesktopECHO/ika's
-native-host toolchain work. This is an unofficial builder, not an official Axion
-release. **OnePlus 9R (`lemonades`), Axion 2.9, userdebug + full GMS is the only
-build-verified profile so far.** Other devices require compatible trees/blobs and
-may need their own patches; accepting a codename does not prove device support.
+Build AxionOS **Android 16** natively on ARM64 Linux using Podman and
+[ika's host toolchains](https://github.com/DesktopECHO/ika/blob/6a04063fdf107bf0c2b51f950291a9703b3a8070/BuildingOnARM64.md).
+No x86 emulation. Android 17/crDroid is not covered.
 
-One successful build is recorded in [docs/known-good.md](docs/known-good.md).
-Boot, camera, telephony, updates, and Play Integrity have **not** been verified on
-hardware. The camera application comes from a third-party repository.
-
-## Layout
-
-```text
-axion-builder               host CLI (Podman)
-docker/Dockerfile           Ubuntu 24.04 ARM64 build dependencies
-manifests/common.xml        pinned Android platform (no OnePlus device/vendor trees)
-manifests/devices/          per-device manifests (lemonades included)
-manifests/known-good.xml     historical flat snapshot of the successful build
-patches/ika/               16 selected upstream patches (one kernel-only excerpt)
-patches/custom/             5 common local compatibility patches
-patches/devices/            device-only patches and per-device series files
-patches/series.json         common application order (21 entries)
-scripts/                   patch, provisioning, and build entry points
-tests/check-patches.py      reconstruct patches against a local source checkout
-```
-
-`work/<device>/`, `.cache/`, `logs/`, all keys, and binaries are ignored. No proprietary
-blobs, Google apps, signing keys, ROM images, or caches are distributed here.
-The manifest references external repositories; you are responsible for any
-applicable terms when fetching them.
+**Build-verified:** OnePlus 9R (`lemonades`), Axion 2.9, `userdebug gms`.
+Other devices need compatible trees/vendor blobs and possibly additional patches.
+Device boot, camera, telephony, updates and Play Integrity remain untested;
+the lemonades camera apps come from a third-party repo. These are unofficial
+local builds, even when upstream filenames contain `OFFICIAL`.
 
 ## Requirements
 
-- ARM64 Linux, Git, Podman (rootless user namespaces configured).
-- Tested: NixOS host, 12 vCPUs, 24 GiB RAM, 32 GiB disk swap, 4 KiB pages.
-- Allow at least 350–450 GiB free for sources, intermediate objects and cache;
-  actual usage varies. Maintain additional space for swap and host workloads.
-- Internet access during sync and provisioning, and potentially during builds.
-- Native `libssl-dev`, `pahole`, `lz4`, Python and other tools are in the container.
-  Host swap is **not** created or modified by this builder.
+- ARM64 Linux, Git, rootless Podman and internet access throughout the build.
+- Tested host: NixOS, 12 vCPUs, 24 GiB RAM, 32 GiB swap, 4 KiB pages.
+- Plan for 350–450 GiB free, plus space for swap and host workloads.
+- Build dependencies are in the container; host swap is not configured for you.
 
-## Fresh build
+## Build
 
 ```bash
 git clone https://github.com/divyam234/axion-builder.git
 cd axion-builder
+export DEVICE=lemonades VARIANT=userdebug GMS=gms
+
 ./axion-builder pull
 ./axion-builder sync
 ./axion-builder patches
@@ -54,139 +31,98 @@ cd axion-builder
 ./axion-builder build
 ```
 
-The default image is `ghcr.io/divyam234/axion-builder:latest`.
-Use `./axion-builder image` only when you want to build it locally.
+Keep the same exported selection for each command. Sources, objects and cache
+persist in `work/<device>/`; logs go to `logs/`. Commands stop on failure without
+resetting source edits or regenerating existing keys. Re-syncing a patched tree
+can conflict; review conflicts rather than resetting your changes.
 
-### Publishing the container image
+| Setting | Default | Options / purpose |
+|---|---|---|
+| `DEVICE` | `lemonades` | Device codename; separate work directory per device |
+| `VARIANT` | `userdebug` | `user`, `userdebug`, `eng` |
+| `GMS` | `gms` | `gms`/`full`, `pico`, `core`, `va`/`vanilla` |
+| `BUILD_JOBS` | `6` | Compile concurrency |
+| `AXION_WORK` | `work/<device>` | Reuse an existing checkout |
+| `DEVICE_MANIFEST` | unset | Absolute path to a device/kernel/vendor repo manifest |
+| `AXION_IMAGE` | `ghcr.io/divyam234/axion-builder:latest` | Container image |
+| `SKIP_GLOBS` | `0` | Set `1` only for edits to existing source-file contents |
 
-Open **Actions → Publish ARM64 builder image → Run workflow**. It runs only on
-`workflow_dispatch` (not every push), builds natively on `ubuntu-24.04-arm`,
-smoke-tests the ARM64 tools and Python SSL, then pushes to GHCR using the
-workflow's `GITHUB_TOKEN` with `packages: write`. No extra registry secret is needed.
-Only the `latest` tag is published. Actions use major-version references;
-BuildKit layers are cached between runs.
+**Skip-globs also skips Soong graph generation.** Leave it off after changing
+build files, patches, toolchains, dependencies or file lists. A new variant/GMS
+selection forces graph generation. `ax -br` still recreates image staging while
+reusing compiled objects. Cumulative `.ninja_log` rows are not a whole-build percentage.
 
-After first publication, check the GHCR package's **Package settings → Change
-visibility → Public** if anonymous pulls fail: GitHub can initially create
-packages as private, even for a public source repository. Alternatively log in
-to GHCR with an account/token allowed to read the package.
+## Devices and commands
 
-This workflow publishes the **container dependencies only**, not a complete ROM.
-The Android source sync, patches, toolchain provisioning and compile still run
-locally with persistent storage and private signing keys.
+Lemonades sync includes its pinned device/common/kernel, OPlus hardware, vendor
+and camera repos. Other devices use the common platform plus their own manifest;
+OnePlus-only patches are never applied to them. Axion's CLI fetches dependencies
+it knows, but missing proprietary blobs must come from the device maintainer.
+See [device setup and adding profiles](docs/devices.md).
 
-Sync defaults to the pinned manifest, including `device/oneplus/lemonades`,
-`sm8250-common`, `hardware/oplus`, kernel, both OnePlus vendor trees, and camera.
-The existing checkout's manifest is never replaced automatically. Re-syncing a
-patched tree may conflict: do not reset source edits to resolve that blindly.
+| Command | Action |
+|---|---|
+| `pull` / `image` | Pull the published container / build it locally |
+| `sync` | Sync selected sources; preserve an existing checkout's manifest |
+| `patches` | Apply common then device patches; recognize already-applied changes |
+| `provision` | Install native ARM64 toolchains |
+| `configure` | Run `axion "$DEVICE" "$VARIANT" "$GMS"` without compiling |
+| `build` | Configure, then compile with Axion's `ax -br` |
+| `shell` / `status` | Open the container / show recent errors and output zips |
 
-### Device, variant and GMS selection
-
-```bash
-# Defaults (the known-good profile):
-export DEVICE=lemonades VARIANT=userdebug GMS=gms
-
-# All accepted build/flavor choices:
-# VARIANT=user | userdebug | eng
-# GMS=gms | full | pico | core | va | vanilla
-```
-
-Use the same exported selection for every command. `full` normalizes to `gms`,
-`vanilla` to `va`. `configure` invokes `axion "$DEVICE" "$VARIANT" "$GMS"`
-without compiling. `build` configures then calls Axion's `ax -br`.
-
-Each device uses a separate `work/<codename>` by default. A work-directory marker
-rejects switching devices in the same tree; use another directory instead.
-Changing variant or GMS forces graph generation even if `SKIP_GLOBS=1` was set.
-
-For another Android 16 device, use the common platform plus a reviewed
-`DEVICE_MANIFEST=/absolute/file.xml` listing compatible device/kernel/vendor
-repositories. Axion's CLI can fetch device dependencies it knows, but cannot
-invent missing proprietary blobs. **No OnePlus patches or camera repositories
-are applied to other devices.** See [docs/devices.md](docs/devices.md) for the
-workflow and how to add a verified device profile.
-
-Commands log to `logs/` and stop on failure. Neither failed patches nor failed
-builds trigger resets, source deletions, or endless automatic retries.
-The complete clean-room workflow has **not** been rebuilt from zero since the
-scripts were reorganized; patch reconstruction and existing-tree checks are
-separate from the original successful ROM build.
-
-## Existing source tree / zellij
+For an existing checkout, export `AXION_WORK=/absolute/path/to/source`.
+Never run concurrent builds in one work directory. To build in zellij:
 
 ```bash
-export AXION_WORK="$HOME/axion-lemonades/work"
-# Never run two builds against the same work directory.
-./axion-builder provision
-./axion-builder build
-
-# Run in a detached session, then attach to watch:
-zellij attach --create-background axion-build -- env \
-  AXION_WORK="$AXION_WORK" bash "$PWD/axion-builder" build
+zellij attach --create-background axion-build -- bash "$PWD/axion-builder" build
 zellij attach axion-build
 ```
 
-The new wrapper does not move or delete the original checkout. `patches` is
-idempotent on its own patched files, but unrelated edits near a patch can cause
-a deliberate conflict. For read-only patch checks:
+## Output and keys
+
+- ROM: `$AXION_WORK/out/target/product/$DEVICE/axion-*.zip`
+- Keys: `$AXION_WORK/vendor/lineage-priv/keys` — back up privately; do not regenerate for updates without a migration plan.
+- Without `AXION_WORK`, these paths are under `work/<device>/`.
+
+No ROMs, proprietary binaries, Google apps, keys or caches are published here;
+external repositories retain their own distribution terms.
+
+## Container publishing
+
+**Actions → Publish ARM64 builder image → Run workflow** publishes only
+`ghcr.io/divyam234/axion-builder:latest`, not a ROM. It uses a native ARM64 runner,
+cached layers, smoke tests, major action versions and `GITHUB_TOKEN` with
+`packages: write`; no registry secret is needed. If a new package starts private,
+set its visibility to Public or authenticate to GHCR.
+
+## Patches and verification
+
+| Path | Contents |
+|---|---|
+| `manifests/common.xml` | Pinned Android platform |
+| `manifests/devices/` | Device-specific source manifests |
+| `manifests/known-good.xml` | Original successful-build snapshot |
+| `patches/ika/` | 16 upstream patch entries |
+| `patches/custom/` | 5 common local fixes |
+| `patches/devices/` | Device-only fixes; 4 for lemonades |
+| `patches/series.json` | Common patch order; device series is applied afterward |
+
+Every build repeats ika's ARM64 configuration and LLVM exports, with
+`THINLTO_USE_MLGO=false`. Toolchain pins: ika `6a04063`, Clang `r584948b`/LLVM 22,
+Rust 1.88.0; native Go, CMake and Temurin 8/21. JDK endpoints, Ubuntu packages and
+the repo launcher are moving inputs, so builds are not bit-for-bit hermetic.
 
 ```bash
-python3 scripts/apply-patches.py "$AXION_WORK" --device "${DEVICE:-lemonades}" --check
-python3 tests/check-patches.py "$AXION_WORK"
 python3 tests/test-builder.py
+# Against the original known-good lemonades checkout:
+python3 tests/check-patches.py /path/to/source
+# Read-only patch check for your selected device:
+python3 scripts/apply-patches.py /path/to/source --device "$DEVICE" --check
 ```
 
-## Incremental builds
+The reorganized runner has not completed a new clean-room build.
+[Build record and checksum](docs/known-good.md) · [Patch details](patches/README.md)
+· [Device profiles](docs/devices.md).
 
-Default concurrency is `BUILD_JOBS=6`; change it explicitly if your RAM permits.
-Sources/objects/cache persist. Axion's `ax -br` runs its normal installclean step,
-so image staging is recreated even when compile objects are reused.
-
-```bash
-# Only when changing contents of already-known source files:
-SKIP_GLOBS=1 ./axion-builder build
-```
-
-**Important:** Axion's `skipGlobs` skips **Soong Ninja graph generation**, not just
-wildcard scanning. Never use it after changing `Android.bp`, module definitions,
-patches, toolchains, dependencies, or source file lists. Use `SKIP_GLOBS=0` (the
-default) after setup or any build-graph change. Do not estimate whole-ROM progress
-by dividing cumulative `.ninja_log` rows by one retry's action count: it counts
-multiple outputs and previous runs, and that produced misleading figures during
-the original session.
-
-## Keys and output
-
-Axion generates local keys once through `envsetup.sh`; this wrapper does not call
-`gk -s` on every retry. Back up your work directory's signing keys **privately** before
-flashing. Do not publish it. Never regenerate keys for an installed ROM's updates
-without planning the signing-key migration.
-
-Output: `work/<device>/out/target/product/<device>/axion-*.zip`
-(or under your explicit `AXION_WORK`). Keys live in that same work directory's
-`vendor/lineage-priv/keys`; keep backups separate for different devices.
-Build completion is not proof of flash safety or device functionality. Despite
-upstream version strings containing `OFFICIAL`, these are locally built images.
-
-## ARM64 patch/runtime contract
-
-ika is pinned to `6a04063fdf107bf0c2b51f950291a9703b3a8070`.
-Provisioning calls its actual `configure_arm64_host_build`; every build repeats
-that configuration and `export_active_llvm_env`, with `THINLTO_USE_MLGO=false`.
-No x86 emulation, no ARM64 paths redirected to x86 binaries.
-
-Toolchain: Clang `clang-r584948b` / LLVM 22, Rust 1.88.0 for this tree, native Go,
-CMake and JDKs from ika's pinned defaults. JDK download endpoints still select
-the latest Temurin 8/21 release: **this is not a bit-for-bit hermetic build**.
-Ubuntu package repositories and the repo launcher are also moving inputs.
-
-See [patches/README.md](patches/README.md) for the local fixes and provenance,
-and [ika's ARM64 guide](https://github.com/DesktopECHO/ika/blob/6a04063fdf107bf0c2b51f950291a9703b3a8070/BuildingOnARM64.md)
-for the upstream approach. Android 17/crDroid is out of scope for this snapshot.
-
-## Licensing
-
-Patches retain their upstream projects' licenses; bundling a diff does not
-relicense the underlying source. See [docs/ika-LICENSE.txt](docs/ika-LICENSE.txt)
-for ika's notices and individual source headers for the Android projects.
-Original builder scripts/docs are provided under the [MIT license](LICENSE).
+Original scripts/docs: [MIT](LICENSE). Patches retain upstream source licenses;
+see [ika's notices](docs/ika-LICENSE.txt) and the patched files' headers.
